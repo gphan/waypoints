@@ -27,10 +27,8 @@
   "Calculates the distance between two waypoints using the haversine formula"
   [w1 w2]
   (let [R 6378100.0 ; Earth's radius in meters
-        lat1 (:lat w1)
-        lat2 (:lat w2)
-        lon1 (:long w1)
-        lon2 (:long w2)
+        {lat1 :lat lon1 :long} w1
+        {lat2 :lat lon2 :long} w2
         lat1-rad (deg->radian lat1)
         lat2-rad (deg->radian lat2)
         lon1-rad (deg->radian lon1)
@@ -43,55 +41,59 @@
         c (* 2 (Math/atan2 (Math/sqrt a) (Math/sqrt (- 1 a))))]
     (* R c)))
 
+(defn- node-distance-to-all [node]
+  (into {} (map (fn [n] [(first n) (waypoints->distance (last node) (last n))]) waypoints)))
+
+(def waypoint-distances (into {}
+                              (map (fn [a] [(first a) (node-distance-to-all a)]) waypoints)))
+
+(defn- node->node-distance [n1 n2]
+  (get-in waypoint-distances [n1 n2]))
+
 (def start (find waypoints :Start))
 (def finish (find waypoints :Finish))
-(def ignore #{:Start :Finish})
 
-(defn- closest-waypoint
-  ([node] (closest-waypoint node ignore))
-  ([node visited] (let [[n p] node
-                         visited (conj visited n)
-                         not-visited? (complement #(contains? visited (first %)))]
-                     (->> waypoints
-                          (filter not-visited?)
-                          (map (fn [[m v]] [m (waypoints->distance p v)]))
-                          (sort-by last <)
-                          first))))
+(defn- output-path-file [structure]
+  (spit "path.kml" (with-out-str (xml/emit structure))))
 
-(defn- find-neighboring-nodes
-  ([node] (find-neighboring-nodes node 5000))
-  ([node threshold] (let [[node-name node-values] node
-                          ignore-nodes (conj ignore node-name)
-                          not-visited? (complement #(contains? ignore-nodes (first %)))]
-                      (->> waypoints
-                           (filter not-visited?)
-                           (map (fn [[n v]] [n (waypoints->distance node-values v)]))
-                           (filter #(< (last %) threshold))
-                           (map first)))))
+(defn- path->coordinates [path]
+  (map (fn [node-name] (let [n (node-name waypoints)]
+                         [(:long n) (:lat n) 0.0])) path))
 
-(defn- score-path
-  "Scores the route between node1 -> node2"
-  [node1 node2]
-  (let [w1 (last node1)
-        w2 (last node2)
-        dist (waypoints->distance w1 w2)
-        ele1 (or (:elevation w1) (:elevation w2) 0)
-        ele2 (or (:elevation w2) (:elevation w1) 0)
-        delta-elev (- ele1 ele2)]
-    (+ (* 0.5 (:points w2)) (* 0.25 dist) (* 0.25 delta-elev))))
+(defn- path->distance [path]
+  (reduce + (map (fn [a b] (node->node-distance a b)) path (rest path))))
 
-(defn best-path [path]
-  "Determines the best path from the last node in the path sequence using the score-path function"
-  (let [last-node-name (last path)
-        node (find waypoints last-node-name)
-        ignore-nodes (into #{} path)
-        not-visited? (complement (fn [[n v]] (contains? ignore-nodes n)))
-        best (->> waypoints
-                  (filter not-visited?)
-                  (map (fn [d] [(first d) (score-path node d)]))
-                  (sort-by last >)
-                  first
-                  first)]
-    (if (nil? best)
-      path
-      (recur (conj path best)))))
+(defn- path->score [path]
+  (reduce + (map (fn [n] (:points (n waypoints))) path)))
+
+(defn- coordinates->kml-structure [coords]
+  {:tag :kml :attrs {:xmlns "http://earth.google.com/kml/2.0"}
+   :content [{:tag :Document
+              :content [{:tag :name :content ["Geocache Route"]}
+                        {:tag :Placemark
+                         :content [{:tag :name :content ["WCG 2015"]}
+                                   {:tag :LineString
+                                    :content [{:tag :coordinates
+                                               :content (map #(clojure.string/join "," %) coords)}]}]}]}]})
+
+; Meters per second
+(def avg-hiking-speed 1.34112)
+(def meters-per-hour (* avg-hiking-speed (* 60 60)))
+(def max-time 4) ; Hours
+(def max-distance (* max-time meters-per-hour))
+(def available-waypoints (disj (set (keys waypoints)) :Start))
+
+(defn- max-score [path-score]
+  (reduce #(if (> (last %1) (last %2)) %1 %2) path-score))
+
+(defn- find-path [current-path available]
+  (let [current-location (last current-path)
+        current-node-data (current-location waypoints)
+        current-distance (path->distance current-path)]
+    (cond
+      (> current-distance max-distance) [current-path current-distance 0]
+      (= :Finish current-location) [current-path current-distance (path->score current-path)]
+      :else (max-score (map #(find-path (conj current-path %) (disj available %)) available)))))
+
+(defn find-best-path []
+  (find-path [:Start] (conj (set (take 20 (shuffle available-waypoints))) :Finish)))
