@@ -2,6 +2,8 @@
 
 Given a GPX file with Geocache locations (see 2015.gpx for an example), this clojure application
 will find an arbitrary path (using about 10 arbitrary nodes) built using a depth-first TPS solution.
+The TPS problem has a distance constraint using the assumption that the hiker can average 3 mph. The time
+contraint is also 4 hours. Meaning there is a max distance constraint of about 19 km.
 Then it will apply hill climbing optimization to improve on the path until it cannot improve on it anymore.
 
 ## Usage
