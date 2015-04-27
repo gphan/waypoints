@@ -51,18 +51,23 @@
 
 ; We use this to reduce the search set for every function below
 ; Filter west and east of Start point
-(def western-waypoints (filter (fn [[k v]] (<= (:long v) (:long (:Start waypoints-all)))) waypoints-all))
-(def eastern-waypoints (filter (fn [[k v]] (>= (:long v) (:long (:Start waypoints-all)))) waypoints-all))
+;(def western-waypoints (filter (fn [[k v]] (<= (:long v) (:long (:Start waypoints-all)))) waypoints-all))
+;(def eastern-waypoints (filter (fn [[k v]] (>= (:long v) (:long (:Start waypoints-all)))) waypoints-all))
 
 ; Reduce problem set until we can apply heuristics
-(def waypoints (take 10 (shuffle (seq waypoints-all))))
+(def partitioned-waypoints (partition 10 5 (shuffle (seq (keys waypoints-all)))))
+
+(defn merge-distances
+  ([] {})
+  ([distances [key distance]] (assoc distances key distance)))
 
 (defn node-distance-to-all [node all]
-  (into {} (map (fn [n] [(first n) (waypoints->distance (last node) (last n))]) all)))
+  (r/reduce merge-distances
+            (r/map (fn [n] [(first n) (waypoints->distance (last node) (last n))]) all)))
 
 ; Calculate distances from one node to any other at startup
-(def waypoint-distances (into {}
-                              (map (fn [a] [(first a) (node-distance-to-all a waypoints-all)]) waypoints-all)))
+(def waypoint-distances (r/reduce merge-distances
+                                  (r/map (fn [a] [(first a) (node-distance-to-all a waypoints-all)]) waypoints-all)))
 
 (defn node->node-distance [n1 n2]
   (get-in waypoint-distances [n1 n2]))
@@ -98,25 +103,32 @@
 (def meters-per-hour (* avg-hiking-speed (* 60 60)))
 (def max-time 4) ; Hours
 (def max-distance (* max-time meters-per-hour))
-(def waypoint-names (conj (into #{} (keys waypoints)) :Start :Finish))
 
-(defn depth-first-path [current-path]
+(defn highest-scoring-path-result
+  ([] [[] 0 0])
+  ([result1 result2]
+   (let [[p1 d1 s1] result1
+         [p2 d2 s2] result2]
+     (if (> s2 s1) result2 result1))))
+
+(defn depth-first-path [current-path waypoint-names]
   (let [current-location (last current-path)
-        current-distance (path->distance current-path)]
+        current-distance (path->distance current-path)
+        current-score (path->score current-path)
+        available (disj waypoint-names current-location)]
     (cond
       (> current-distance max-distance) [current-path current-distance 0]
-      (= :Finish current-location) [current-path current-distance (path->score current-path)]
-      :else (let [available (clojure.set/difference waypoint-names (into #{} current-path))]
-              (first (sort-by last > (into [] (r/map #(depth-first-path (conj current-path %)) available))))))))
+      (= :Finish current-location) [current-path current-distance current-score]
+      :else (r/fold highest-scoring-path-result
+                    (r/map #(depth-first-path (conj current-path %) available) available)))))
 
-(defn find-a-path []
-  (depth-first-path [:Start]))
+(defn depth-first [waypoints-list]
+  (r/map #(depth-first-path [:Start] (into (into #{} %) [:Start :Finish])) waypoints-list))
 
 (defn output-path-results [path-results]
   (let [filename (str "path-" (System/currentTimeMillis) ".kml")]
     (do
       (->> path-results path-results->kml-structure (kml-structure->file filename))
-      (println (str "Path KML saved to " filename))
       filename)))
 
 (defn insert-new-point [path-left path-right new-node]
@@ -132,13 +144,17 @@
         distance (path->distance path)]
   [(conj path-left new-node) rest-right score distance]))
 
-(defn best-path [o n]
-  (let [[oleft oright os od] o
-        [nleft nright ns nd] n]
-    (if (or (not= :Finish (last (concat nleft nright)))
-            (nil? n)
-            (> nd max-distance))
-      o (if (> ns os) n o))))
+(defn best-path
+  ([] [[] [] 0 0])
+  ([o n]
+   (let [[oleft oright os od] o
+         [nleft nright ns nd] n]
+     (if (or (not= :Finish (last (concat nleft nright)))
+             (nil? n)
+             (> nd max-distance))
+       o (if (> ns os)
+           n
+           (if (and (= ns os) (< nd od)) n o))))))
 
 (defn hill-climb-path [path]
   (loop [left [(first path)]
@@ -148,13 +164,12 @@
          avail (clojure.set/difference (into #{} (keys waypoints-all)) (into #{} path))]
     (if (empty? right)
       [left distance score]
-      (let [insertions (map (partial insert-new-point left right) avail)
+      (let [current [(conj left (first right)) (rest right) score distance]
+            insertions (map (partial insert-new-point left right) avail)
             replacements (map (partial replace-next-point left right) avail)
-            both (concat insertions replacements)
-            [l r s d :as best-solution] (reduce best-path [(conj left (first right)) (rest right) score distance] both)]
+            all (concat replacements insertions [current])
+            [l r s d :as best-solution] (r/fold best-path all)]
         (do
-          (if (not= score s)
-            (println (str "Current best solution: " best-solution)))
           (recur l r s d (disj avail (last l))))))))
 
 (defn hill-climb [path-result]
@@ -165,10 +180,21 @@
       p
       (recur (hill-climb-path (first p)) p))))
 
+(defn best-of-random-hill-climbs []
+  (->> partitioned-waypoints
+       (depth-first)
+       (r/map hill-climb)
+       (r/fold highest-scoring-path-result)))
+
 (defn -main [& args]
-  (let [base-path (find-a-path)]
+  (if (empty? args)
     (do
-      (println (str "Base path: " base-path))
-      (let [path-results (hill-climb base-path)]
-        (println (str "Hill-climbed path: " path-results))
-        (output-path-results path-results)))))
+      (println (str "Running random-restart hill-climb search..."))
+      (let [path-results (best-of-random-hill-climbs)]
+        (println (str "Best hill-climbed path: " path-results))
+        (output-path-results path-results)))
+    (let [path (doall (map #(keyword %) args))]
+        (println (str "Optimizing manual path: " (pr-str path)))
+        (let [optimized (hill-climb [path 0 0])]
+          (println (str "Optimized form: " optimized))
+          (output-path-results optimized)))))

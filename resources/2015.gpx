@@ -13548,6 +13548,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.836949" lon="-120.476303">
+  <ele>468.0</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Finish</name>
   <desc>0 Pts</desc>
@@ -14060,6 +14061,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.836949" lon="-120.476303">
+  <ele>468.0</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Start</name>
   <desc>0 Pts</desc>

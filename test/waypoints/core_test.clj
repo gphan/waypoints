@@ -95,34 +95,39 @@
         (is (= 300
                (path->score path)))))))
 
-(deftest depth-first-path-test
-  (testing "Base case if current distance is over maximum"
-    (with-redefs [max-distance 1000
-                  path->distance (constantly 1001)]
-      (let [path [:N1 :N2]]
-        (is (= [path 1001 0]
-               (depth-first-path path))))))
-  (testing "Path ends on :Finish, return the path with score and distance"
-    (with-redefs [max-distance 1000
-                  path->distance (constantly 999)
-                  path->score (constantly 1000)]
-      (let [path [:Start :1 :2 :Finish]]
-        (is (= [path 999 1000]
-               (depth-first-path path))))))
-  (testing "Recursively maps self over possible next waypoints"
-    (with-redefs [max-distance 1000
-                  path->distance (constantly 500)
-                  path->score (constantly 1000)
-                  waypoint-names #{:Finish}]
-      (let [path [:Start :1 :2]]
-        (is (= [[:Start :1 :2 :Finish] 500 1000]
-               (depth-first-path path)))))))
+(deftest highest-scoring-path-result-test
+  (testing "Returns the highest scoring path result based on score"
+    (let [result1 [[:Start :Finish] 1000 100]
+          result2 [[:Start :Finish] 1000 200]]
+      (is (= result2
+             (highest-scoring-path-result result1 result2)))))
+  (testing "Identity call should return a zero score path result"
+    (is (= [[] 0 0]
+           (highest-scoring-path-result)))))
 
-(deftest find-a-path-test
-  (testing "Calls depth-first-path and passes the :Start point as the beginning"
-    (with-redefs [depth-first-path #(identity %)]
-      (is (= [:Start]
-             (find-a-path))))))
+(deftest depth-first-path-test
+  (let [waypoint-names #{:Finish}]
+    (testing "Base case if current distance is over maximum"
+      (with-redefs [max-distance 1000
+                    path->distance (constantly 1001)
+                    path->score (constantly 0)]
+        (let [path [:N1 :N2]]
+          (is (= [path 1001 0]
+                 (depth-first-path path waypoint-names))))))
+    (testing "Path ends on :Finish, return the path with score and distance"
+      (with-redefs [max-distance 1000
+                    path->distance (constantly 999)
+                    path->score (constantly 1000)]
+        (let [path [:Start :1 :2 :Finish]]
+          (is (= [path 999 1000]
+                 (depth-first-path path waypoint-names))))))
+    (testing "Recursively maps self over possible next waypoints"
+      (with-redefs [max-distance 1000
+                    path->distance (constantly 500)
+                    path->score (constantly 1000)]
+        (let [path [:Start :1 :2]]
+          (is (= [[:Start :1 :2 :Finish] 500 1000]
+                 (depth-first-path path waypoint-names))))))))
 
 (deftest insert-new-point-test
   (with-redefs [path->score (constantly 500)
@@ -161,7 +166,7 @@
   (with-redefs [path->score (constantly 1000)
                 path->distance (constantly 1000)
                 insert-new-point (constantly [:Start :1])
-                waypoints {:1 nil :2 nil :3 nil :4 nil}]
+                waypoints-all {:1 nil :2 nil :3 nil :4 nil}]
     (testing "Not complete path returns the same path"
       (is (= [[:Start] 1000 1000]
-             (find-better-path [:Start]))))))
+             (hill-climb-path [:Start]))))))
