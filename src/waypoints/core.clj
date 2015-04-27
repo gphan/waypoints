@@ -54,9 +54,6 @@
 ;(def western-waypoints (filter (fn [[k v]] (<= (:long v) (:long (:Start waypoints-all)))) waypoints-all))
 ;(def eastern-waypoints (filter (fn [[k v]] (>= (:long v) (:long (:Start waypoints-all)))) waypoints-all))
 
-; Reduce problem set until we can apply heuristics
-(def partitioned-waypoints (partition 10 5 (shuffle (seq (keys waypoints-all)))))
-
 (defn merge-distances
   ([] {})
   ([distances [key distance]] (assoc distances key distance)))
@@ -122,8 +119,8 @@
       :else (r/fold highest-scoring-path-result
                     (r/map #(depth-first-path (conj current-path %) available) available)))))
 
-(defn depth-first [waypoints-list]
-  (r/map #(depth-first-path [:Start] (into (into #{} %) [:Start :Finish])) waypoints-list))
+(defn depth-first [waypoints]
+  (depth-first-path [:Start] (into (into #{} waypoints) [:Start :Finish])))
 
 (defn output-path-results [path-results]
   (let [filename (str "path-" (System/currentTimeMillis) ".kml")]
@@ -174,15 +171,22 @@
 
 (defn hill-climb [path-result]
   "Does a hill-climb optimization on the path result until it cannot anymore"
+  (println "Base path:\n" path-result)
   (loop [p path-result
          last-p nil]
     (if (= p last-p)
-      p
+      (do
+        (println "Locally Optimized Path:\n" p "\n")
+        p)
       (recur (hill-climb-path (first p)) p))))
 
 (defn best-of-random-hill-climbs []
-  (->> partitioned-waypoints
-       (depth-first)
+  (->> waypoints-all
+       keys
+       seq
+       shuffle
+       (partition 10 5)
+       (r/map depth-first)
        (r/map hill-climb)
        (r/fold highest-scoring-path-result)))
 
@@ -191,8 +195,8 @@
     (do
       (println (str "Running random-restart hill-climb search..."))
       (let [path-results (best-of-random-hill-climbs)]
-        (println (str "Best hill-climbed path: " path-results))
-        (output-path-results path-results)))
+        (println (str "Best hill-climbed path:\n" path-results))
+        (println (str "Writing KML file to: " (output-path-results path-results)))))
     (let [path (doall (map #(keyword %) args))]
         (println (str "Optimizing manual path: " (pr-str path)))
         (let [optimized (hill-climb [path 0 0])]
