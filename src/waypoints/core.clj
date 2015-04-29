@@ -60,7 +60,12 @@
 
 (defn node-distance-to-all [node all]
   (r/reduce merge-distances
-            (r/map (fn [n] [(first n) (waypoints->distance (last node) (last n))]) all)))
+            (r/map (fn [n] [(first n)
+                            (let [n1 (last node)
+                                  n2 (last n)]
+                              (+ (waypoints->distance n1 n2)
+                                 (- (:elevation n2) (:elevation n1))))])
+                   all)))
 
 ; Calculate distances from one node to any other at startup
 (def waypoint-distances (r/reduce merge-distances
@@ -210,6 +215,15 @@
         distance (path->distance path)]
   [path distance score]))
 
+(defn tabu-reverse-middle [path]
+  (let [start (first path)
+        end (last path)
+        middle (butlast (rest path))
+        next-path (concat [start] (reverse middle) [end])
+        score (path->score next-path)
+        distance (path->distance next-path)]
+    [path distance score]))
+
 (defn tabu-find-neighbors [path]
   (let [avail (clojure.set/difference (into #{} (keys waypoints-all)) (into #{} path))]
     (loop [neighbors []
@@ -218,7 +232,7 @@
       (if (empty? right)
         (filter (fn [[p d s]] (and (= :Finish (last p))
                                    (<= d max-distance)))
-                neighbors)
+                (concat neighbors (map #(tabu-reverse-middle (first %)) neighbors)))
         (let [insertions (map (partial tabu-insert-point left right) avail)
               replacements (map (partial tabu-replace-point left right) avail)
               removes (map (partial tabu-remove-point left right) [1 2 3])
@@ -228,18 +242,18 @@
 (defn tabu-search [path-result]
   (loop [best path-result
          candidate best
-         st nil
+         tabu nil
          best-itr 0]
     (if (or (= best-itr 100) ; If we've had our best for 100 iterations, give up
             (= candidate (highest-scoring-path-result))) ; If our candidate is nil set, we're out of possible jobs
       best
-      (let [neighbors (filter (complement (fn [a] (some #(= a %) st))) (tabu-find-neighbors (first candidate)))
+      (let [neighbors (filter (complement (fn [a] (some #(= (first a) %) tabu))) (tabu-find-neighbors (first candidate)))
             best-candidate (reduce highest-scoring-path-result neighbors)
             next-best (highest-scoring-path-result best best-candidate)]
         (do
           (println "Best candidate: " best-candidate)
           (println "Current best: " next-best)
-          (recur next-best best-candidate (take 50 (cons best-candidate st)) (if (= best next-best) (inc best-itr))))))))
+          (recur next-best best-candidate (take 50 (cons (first best-candidate) tabu)) (if (= best next-best) (inc best-itr) 0)))))))
 
 (defn -main [& args]
   (if (empty? args)

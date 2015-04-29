@@ -13581,6 +13581,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.79465" lon="-120.47033">
+  <ele>558.698</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>H20-1</name>
   <desc>100 Pts</desc>
@@ -13613,6 +13614,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.82386" lon="-120.55528">
+   <ele>594.97</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>H20-2</name>
   <desc>100 Pts</desc>
@@ -13645,6 +13647,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.85872" lon="-120.44467">
+   <ele>424.28</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>H20-3</name>
   <desc>100 Pts</desc>
@@ -13677,6 +13680,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.81367" lon="-120.45811">
+   <ele>609.29</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>H20-4</name>
   <desc>100 Pts</desc>
@@ -13709,6 +13713,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.83137" lon="-120.6">
+   <ele>912.57</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-1</name>
   <desc>0 Pts</desc>
@@ -13741,6 +13746,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.80553" lon="-120.52664">
+   <ele>584.61</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-10</name>
   <desc>0 Pts</desc>
@@ -13773,6 +13779,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.79767" lon="-120.50106">
+   <ele>654.71</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-11</name>
   <desc>0 Pts</desc>
@@ -13805,6 +13812,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.84101" lon="-120.52551">
+   <ele>818.69</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-2</name>
   <desc>0 Pts</desc>
@@ -13837,6 +13845,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.80049" lon="-120.43698">
+   <ele>829.67</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-3</name>
   <desc>0 Pts</desc>
@@ -13869,6 +13878,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.85576" lon="-120.49415">
+   <ele>498.35</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-4</name>
   <desc>0 Pts</desc>
@@ -13901,6 +13911,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.85858" lon="-120.44423">
+   <ele>421.54</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-5</name>
   <desc>0 Pts</desc>
@@ -13933,6 +13944,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.82117" lon="-120.42975">
+   <ele>954.63</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-6</name>
   <desc>0 Pts</desc>
@@ -13965,6 +13977,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.76292" lon="-120.48922">
+   <ele>659.89</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-7</name>
   <desc>0 Pts</desc>
@@ -13997,6 +14010,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.76144" lon="-120.42987">
+   <ele>535.84</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-8</name>
   <desc>0 Pts</desc>
@@ -14029,6 +14043,7 @@ xmlns="http://www.topografix.com/GPX/1/1">
    </extensions>
 </wpt>
  <wpt lat="44.80677" lon="-120.56047">
+   <ele>652.27</ele>
   <time>2013-03-25T08:00:00Z</time>
   <name>Ref-9</name>
   <desc>0 Pts</desc>
