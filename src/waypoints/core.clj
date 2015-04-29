@@ -190,15 +190,64 @@
        (r/map hill-climb)
        (r/fold highest-scoring-path-result)))
 
+(defn tabu-insert-point [path-left path-right new-node]
+  (let [path (concat path-left [new-node] path-right)
+        score (path->score path)
+        distance (path->distance path)]
+    [path distance score]))
+
+(defn tabu-replace-point [path-left path-right new-node]
+  (let [rest-right (rest path-right)
+        path (concat path-left [new-node] rest-right)
+        score (path->score path)
+        distance (path->distance path)]
+  [path distance score]))
+
+(defn tabu-remove-point [path-left path-right n]
+  (let [right (drop n path-right)
+        path (concat path-left right)
+        score (path->score path)
+        distance (path->distance path)]
+  [path distance score]))
+
+(defn tabu-find-neighbors [path]
+  (let [avail (clojure.set/difference (into #{} (keys waypoints-all)) (into #{} path))]
+    (loop [neighbors []
+           left [(first path)]
+           right (rest path)]
+      (if (empty? right)
+        (filter (fn [[p d s]] (and (= :Finish (last p))
+                                   (<= d max-distance)))
+                neighbors)
+        (let [insertions (map (partial tabu-insert-point left right) avail)
+              replacements (map (partial tabu-replace-point left right) avail)
+              removes (map (partial tabu-remove-point left right) [1 2 3])
+              all (concat insertions replacements removes)]
+          (recur (into neighbors all) (conj left (first right)) (rest right)))))))
+
+(defn tabu-search [path-result]
+  (loop [best path-result
+         candidate best
+         st nil]
+    (if (= candidate (highest-scoring-path-result)) ; If our candidate is nil set, we're out of possible jobs
+      best
+      (let [neighbors (filter (complement (fn [a] (some #(= a %) st))) (tabu-find-neighbors (first candidate)))
+            best-candidate (reduce highest-scoring-path-result neighbors)
+            next-best (highest-scoring-path-result best best-candidate)]
+        (do
+          (println "Best candidate: " best-candidate)
+          (println "Current best: " next-best)
+          (recur next-best best-candidate (take 50 (cons best-candidate st))))))))
+
 (defn -main [& args]
   (if (empty? args)
     (do
-      (println (str "Running random-restart hill-climb search..."))
+      (println "Running random-restart hill-climb search...")
       (let [path-results (best-of-random-hill-climbs)]
-        (println (str "Best hill-climbed path:\n" path-results))
-        (println (str "Writing KML file to: " (output-path-results path-results)))))
+        (println "Best hill-climbed path:\n" path-results)
+        (println "Writing KML file to: " (output-path-results path-results))))
     (let [path (doall (map #(keyword %) args))]
-        (println (str "Optimizing manual path: " (pr-str path)))
+        (println "Optimizing manual path: " (pr-str path))
         (let [optimized (hill-climb [path 0 0])]
-          (println (str "Optimized form: " optimized))
+          (println "Optimized form: " optimized)
           (output-path-results optimized)))))

@@ -21,7 +21,7 @@ lein run
 
 ## TODO
 
-* Add Tabu Search
+* Apply terrain data and calculate path between points using A-star
 
 ## License
 
