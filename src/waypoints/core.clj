@@ -228,8 +228,10 @@
 (defn tabu-search [path-result]
   (loop [best path-result
          candidate best
-         st nil]
-    (if (= candidate (highest-scoring-path-result)) ; If our candidate is nil set, we're out of possible jobs
+         st nil
+         best-itr 0]
+    (if (or (= best-itr 100) ; If we've had our best for 100 iterations, give up
+            (= candidate (highest-scoring-path-result))) ; If our candidate is nil set, we're out of possible jobs
       best
       (let [neighbors (filter (complement (fn [a] (some #(= a %) st))) (tabu-find-neighbors (first candidate)))
             best-candidate (reduce highest-scoring-path-result neighbors)
@@ -237,7 +239,7 @@
         (do
           (println "Best candidate: " best-candidate)
           (println "Current best: " next-best)
-          (recur next-best best-candidate (take 50 (cons best-candidate st))))))))
+          (recur next-best best-candidate (take 50 (cons best-candidate st)) (if (= best next-best) (inc best-itr))))))))
 
 (defn -main [& args]
   (if (empty? args)
