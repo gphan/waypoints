@@ -42,15 +42,39 @@
     (let [w1 {:lat 38.898556 :long -77.037852}
           w2 {:lat 38.897147 :long -77.043934}]
       (is (< (Math/abs (- 549.0
-                (waypoints->distance w1 w2))) 1)))))
+                          (waypoints->distance w1 w2))) 1)))))
 
-(deftest node-distance-to-all-test
-  (testing "Generates distances to all nodes including itself"
-    (let [node1 [:Node1 :data]
-          node2 [:Node2 :data]]
-      (with-redefs [waypoints->distance (constantly 0)]
-        (is (= {:Node1 0 :Node2 0}
-               (node-distance-to-all node1 [node1 node2])))))))
+(deftest waypoints->elevation-gain-test
+  (testing "Calculates elevation differences"
+    (let [w1 {:elevation 500.0}
+          w2 {:elevation 1000.0}]
+      (is (= 500.0
+             (waypoints->elevation-gain w1 w2)))))
+  (testing "Returns 0 if elevation gain is less than zero"
+    (let [w1 {:elevation 1000.0}
+          w2 {:elevation 500.0}]
+      (is (= 0
+             (waypoints->elevation-gain w1 w2))))))
+
+(deftest apply-to-nodes-test
+  (testing "Runs function with first parameter and all in data set"
+    (let [f vector
+          n [:Node1 :1]
+          s [[:Node2 :2] [:Node3 :3]]]
+      (is (= {:Node2 [:1 :2] :Node3 [:1 :3]}
+             (apply-to-nodes f n s))))))
+
+(deftest merge-key-val-test
+  (testing "Empty call returns empty map"
+    (is (= {}
+           (merge-key-val))))
+  (testing "Associates a key and value to empty map"
+    (is (= {:banana "phone"}
+           (merge-key-val {} [:banana "phone"]))))
+  (testing "Associates key and value to existing map"
+    (is (= {:banana "phone" :existing "value"}
+           (merge-key-val {:existing "value"} [:banana "phone"])))))
+
 
 (deftest node->node-distance-test
   (testing "Looks up distance in waypoint-distances map"
@@ -97,58 +121,72 @@
 
 (deftest highest-scoring-path-result-test
   (testing "Returns the highest scoring path result based on score"
-    (let [result1 [[:Start :Finish] 1000 100]
-          result2 [[:Start :Finish] 1000 200]]
+    (let [result1 [[:Start :Finish] 1000 100 100]
+          result2 [[:Start :Finish] 1000 100 200]]
       (is (= result2
              (highest-scoring-path-result result1 result2)))))
   (testing "Identity call should return a zero score path result"
-    (is (= [[] 0 0]
+    (is (= [[] 0 0 0]
            (highest-scoring-path-result)))))
 
 (deftest depth-first-path-test
   (let [waypoint-names #{:Finish}]
-    (testing "Base case if current distance is over maximum"
+    (testing "Base case if current distance is over maximum values"
       (with-redefs [max-distance 1000
                     path->distance (constantly 1001)
-                    path->score (constantly 0)]
+                    path->elevation-gain (constantly 100)
+                    path->score (constantly 1)]
         (let [path [:N1 :N2]]
-          (is (= [path 1001 0]
+          (is (= [path 1001 100 0]
+                 (depth-first-path path waypoint-names)))))
+      (with-redefs [max-elevation 100
+                    path->distance (constantly 1000)
+                    path->elevation-gain (constantly 101)
+                    path->score (constantly 1)]
+        (let [path [:N1 :N2]]
+          (is (= [path 1000 101 0]
                  (depth-first-path path waypoint-names))))))
     (testing "Path ends on :Finish, return the path with score and distance"
       (with-redefs [max-distance 1000
                     path->distance (constantly 999)
+                    path->elevation-gain (constantly 100)
                     path->score (constantly 1000)]
         (let [path [:Start :1 :2 :Finish]]
-          (is (= [path 999 1000]
+          (is (= [path 999 100 1000]
                  (depth-first-path path waypoint-names))))))
     (testing "Recursively maps self over possible next waypoints"
       (with-redefs [max-distance 1000
                     path->distance (constantly 500)
+                    path->elevation-gain (constantly 100)
                     path->score (constantly 1000)]
         (let [path [:Start :1 :2]]
-          (is (= [[:Start :1 :2 :Finish] 500 1000]
+          (is (= [[:Start :1 :2 :Finish] 500 100 1000]
                  (depth-first-path path waypoint-names))))))))
 
 (deftest insert-new-point-test
   (with-redefs [path->score (constantly 500)
-                path->distance (constantly 400)]
+                path->distance (constantly 400)
+                path->elevation-gain (constantly 100)]
     (testing "Creates new path and calculates path and score"
-      (is (= [[:Start :1] [:Finish] 500 400]
+      (is (= [[:Start :1] [:Finish] 500 400 100]
              (insert-new-point [:Start] [:Finish] :1))))))
 
 (deftest replace-next-point-test
   (with-redefs [path->score (constantly 500)
-                path->distance (constantly 400)]
+                path->distance (constantly 400)
+                path->elevation-gain (constantly 100)]
     (testing "Creates new path with first right list replaced and calculates distance and score"
-      (is (= [[:Start :1] [] 500 400]
+      (is (= [[:Start :1] [] 500 400 100]
              (replace-next-point [:Start] [:Finish] :1))))))
 
 (deftest best-path-test
-  (with-redefs [max-distance 10000]
-    (let [better-path [[:S :1 :2] [:Finish] 9999 1000]
-          bad-path [[:S :1 :Finish] [] 1000 0]
-          invalid-path [[:S :1 :2] [:3] 1000 1100]
-          too-long-path [[:S :1 :2 :3 :4] [:Finish] 10001 10001]]
+  (with-redefs [max-distance 10000
+                max-elevation 10000]
+    (let [better-path [[:S :1 :2] [:Finish] 9999 100 1000]
+          bad-path [[:S :1 :Finish] [] 1000 100 0]
+          invalid-path [[:S :1 :2] [:3] 1000 100 1100]
+          too-long-path [[:S :1 :2 :3 :4] [:Finish] 10001 100 10001]
+          too-high-path [[:S :1 :2 :3 :4] [:Finish] 10001 10001 10001]]
       (testing "Original path is worse than new path and is replaced"
         (is (= better-path
                (best-path bad-path better-path))))
@@ -158,9 +196,12 @@
       (testing "Invalid path is ignore if it doesn't have Finish"
         (is (= bad-path
                (best-path bad-path invalid-path))))
-      (testing "Path that is over max-distance is ignored"
+      (testing "path that is over max-distance is ignored"
         (is (= bad-path
-               (best-path bad-path too-long-path)))))))
+               (best-path bad-path too-long-path))))
+      (testing "Path that is over max-elevation is ignored"
+        (is (= bad-path
+               (best-path bad-path too-high-path)))))))
 
 (deftest hill-climb-path-test
   (with-redefs [path->score (constantly 1000)

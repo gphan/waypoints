@@ -49,30 +49,45 @@
         c (* 2 (Math/atan2 (Math/sqrt a) (Math/sqrt (- 1 a))))]
     (* R c)))
 
+(defn waypoints->elevation-gain [w1 w2]
+  (let [e1 (:elevation w1)
+        e2 (:elevation w2)
+        diff (- e2 e1)]
+    (max 0 diff)))
+
 ; We use this to reduce the search set for every function below
 ; Filter west and east of Start point
 ;(def western-waypoints (filter (fn [[k v]] (<= (:long v) (:long (:Start waypoints-all)))) waypoints-all))
 ;(def eastern-waypoints (filter (fn [[k v]] (>= (:long v) (:long (:Start waypoints-all)))) waypoints-all))
 
-(defn merge-distances
+(defn merge-key-val
   ([] {})
-  ([distances [key distance]] (assoc distances key distance)))
+  ([d [k v]] (assoc d k v)))
 
-(defn node-distance-to-all [node all]
-  (r/reduce merge-distances
+(defn apply-to-nodes [f node all]
+  (r/reduce merge-key-val
             (r/map (fn [n] [(first n)
                             (let [n1 (last node)
                                   n2 (last n)]
-                              (+ (waypoints->distance n1 n2)
-                                 (- (:elevation n2) (:elevation n1))))])
+                              (f n1 n2))])
                    all)))
 
+(def node-distance-to-all (partial apply-to-nodes waypoints->distance))
+(def node-elevation-to-all (partial apply-to-nodes waypoints->elevation-gain))
+
+(defn map-between-waypoints [f waypoints]
+  (r/reduce merge-key-val
+            (r/map (fn [a] [(first a) (f a waypoints)]) waypoints)))
+
 ; Calculate distances from one node to any other at startup
-(def waypoint-distances (r/reduce merge-distances
-                                  (r/map (fn [a] [(first a) (node-distance-to-all a waypoints-all)]) waypoints-all)))
+(def waypoint-distances (map-between-waypoints node-distance-to-all waypoints-all))
+(def waypoint-elevation-gain (map-between-waypoints node-elevation-to-all waypoints-all))
 
 (defn node->node-distance [n1 n2]
   (get-in waypoint-distances [n1 n2]))
+
+(defn node->node-elevation-gain [n1 n2]
+  (get-in waypoint-elevation-gain [n1 n2]))
 
 (defn kml-structure->file [f structure]
   (spit f (with-out-str (xml/emit structure))))
@@ -84,18 +99,29 @@
 (defn path->distance [path]
   (reduce + (map (fn [a b] (node->node-distance a b)) path (rest path))))
 
+(defn path->elevation-gain [path]
+  (reduce + (map (fn [a b] (node->node-elevation-gain a b)) path (rest path))))
+
 (defn path->score [path]
   (reduce + (map (fn [n] (:points (n waypoints-all))) path)))
 
+(defn path->path-result [path]
+  [path
+   (path->distance path)
+   (path->elevation-gain path)
+   (path->score path)])
+
 (defn path-results->kml-structure [path-results]
-  (let [[path distance points] path-results]
-    {:tag :kml :attrs {:xmlns "http://earth.google.com/kml/2.0"}
+  (let [[path distance elevation points] path-results]
+    {:tag :kml
+     :attrs {:xmlns "http://earth.google.com/kml/2.0"}
      :content [{:tag :Document
                 :content [{:tag :name :content ["Geocache Route"]}
                           {:tag :Placemark
                            :content [{:tag :name :content ["WCG 2015"]}
                                      {:tag :description :content [(str "Points: " points)
-                                                                  (str "Distance: " distance)]}
+                                                                  (str "Distance: " distance)
+                                                                  (str "Elevation: " elevation)]}
                                      {:tag :LineString
                                       :content [{:tag :coordinates
                                                  :content (map #(clojure.string/join "," %) (path->coordinates path waypoints-all))}]}]}]}]}))
@@ -103,24 +129,27 @@
 ; Meters per second
 (def avg-hiking-speed 1.34112)
 (def meters-per-hour (* avg-hiking-speed (* 60 60)))
-(def max-time 4) ; Hours
+(def max-time 3) ; Hours
 (def max-distance (* max-time meters-per-hour))
+(def max-elevation 609.0) ; 2000 ft
 
 (defn highest-scoring-path-result
-  ([] [[] 0 0])
+  ([] [[] 0 0 0])
   ([result1 result2]
-   (let [[p1 d1 s1] result1
-         [p2 d2 s2] result2]
+   (let [[_ _ _ s1] result1
+         [_ _ _ s2] result2]
      (if (> s2 s1) result2 result1))))
 
 (defn depth-first-path [current-path waypoint-names]
   (let [current-location (last current-path)
         current-distance (path->distance current-path)
+        current-elevation (path->elevation-gain current-path)
         current-score (path->score current-path)
         available (disj waypoint-names current-location)]
     (cond
-      (> current-distance max-distance) [current-path current-distance 0]
-      (= :Finish current-location) [current-path current-distance current-score]
+      (or (> current-distance max-distance)
+          (> current-elevation max-elevation)) [current-path current-distance current-elevation 0]
+      (= :Finish current-location) [current-path current-distance current-elevation current-score]
       :else (r/fold highest-scoring-path-result
                     (r/map #(depth-first-path (conj current-path %) available) available)))))
 
@@ -136,24 +165,27 @@
 (defn insert-new-point [path-left path-right new-node]
   (let [path (concat path-left [new-node] path-right)
         score (path->score path)
-        distance (path->distance path)]
-    [(conj path-left new-node) path-right score distance]))
+        distance (path->distance path)
+        elevation (path->elevation-gain path)]
+    [(conj path-left new-node) path-right score distance elevation]))
 
 (defn replace-next-point [path-left path-right new-node]
   (let [rest-right (rest path-right)
         path (concat path-left [new-node] rest-right)
         score (path->score path)
-        distance (path->distance path)]
-  [(conj path-left new-node) rest-right score distance]))
+        distance (path->distance path)
+        elevation (path->elevation-gain path)]
+  [(conj path-left new-node) rest-right score distance elevation]))
 
 (defn best-path
-  ([] [[] [] 0 0])
+  ([] [[] [] 0 0 0])
   ([o n]
-   (let [[oleft oright os od] o
-         [nleft nright ns nd] n]
+   (let [[oleft oright os od oe] o
+         [nleft nright ns nd ne] n]
      (if (or (not= :Finish (last (concat nleft nright)))
              (nil? n)
-             (> nd max-distance))
+             (> nd max-distance)
+             (> ne max-elevation))
        o (if (> ns os)
            n
            (if (and (= ns os) (< nd od)) n o))))))
@@ -163,16 +195,17 @@
          right (rest path)
          score (path->score path)
          distance (path->distance path)
+         elevation (path->elevation-gain path)
          avail (clojure.set/difference (into #{} (keys waypoints-all)) (into #{} path))]
     (if (empty? right)
-      [left distance score]
-      (let [current [(conj left (first right)) (rest right) score distance]
+      [left distance elevation score]
+      (let [current [(conj left (first right)) (rest right) score distance elevation]
             insertions (map (partial insert-new-point left right) avail)
             replacements (map (partial replace-next-point left right) avail)
             all (concat replacements insertions [current])
-            [l r s d :as best-solution] (r/fold best-path all)]
+            [l r s d e :as best-solution] (r/fold best-path all)]
         (do
-          (recur l r s d (disj avail (last l))))))))
+          (recur l r s d e (disj avail (last l))))))))
 
 (defn hill-climb [path-result]
   "Does a hill-climb optimization on the path result until it cannot anymore"
@@ -198,22 +231,25 @@
 (defn tabu-insert-point [path-left path-right new-node]
   (let [path (concat path-left [new-node] path-right)
         score (path->score path)
+        elevation (path->elevation-gain path)
         distance (path->distance path)]
-    [path distance score]))
+    [path distance elevation score]))
 
 (defn tabu-replace-point [path-left path-right new-node]
   (let [rest-right (rest path-right)
         path (concat path-left [new-node] rest-right)
         score (path->score path)
+        elevation (path->elevation-gain path)
         distance (path->distance path)]
-  [path distance score]))
+  [path distance elevation score]))
 
 (defn tabu-remove-point [path-left path-right n]
   (let [right (drop n path-right)
         path (concat path-left right)
         score (path->score path)
+        elevation (path->elevation-gain path)
         distance (path->distance path)]
-  [path distance score]))
+  [path distance elevation score]))
 
 (defn tabu-reverse-middle [path]
   (let [start (first path)
@@ -221,8 +257,9 @@
         middle (butlast (rest path))
         next-path (concat [start] (reverse middle) [end])
         score (path->score next-path)
+        elevation (path->elevation-gain path)
         distance (path->distance next-path)]
-    [path distance score]))
+    [path distance elevation score]))
 
 (defn tabu-find-neighbors [path]
   (let [avail (clojure.set/difference (into #{} (keys waypoints-all)) (into #{} path))]
